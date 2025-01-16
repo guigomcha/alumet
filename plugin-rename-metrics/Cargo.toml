@@ -1,0 +1,12 @@
+[package]
+name = "plugin-rename-metrics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alumet = { path = "../alumet" } # LOCAL + NO VERSION
+anyhow = "1.0"
+log = "0.4"
+
+[lints]
+workspace = true

@@ -26,6 +26,7 @@ plugin-relay = { path = "../plugin-relay", optional = true }
 plugin-procfs = { path = "../plugin-procfs", optional = true }
 plugin-cgroupv2 = { path = "../plugin-cgroupv2", optional = true }
 plugin-influxdb = { path = "../plugin-influxdb", optional = true }
+plugin-rename-metrics = { version = "0.1.0", path = "../plugin-rename-metrics" }
 
 [features]
 # local non-relay mode for x86 processors

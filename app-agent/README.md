@@ -12,7 +12,7 @@ Here is how to quickly run the local agent.
 cargo run --bin alumet-local-agent --features local_x86
 ```
 
-Use `cargo build` instead of `cargo run` to build an executable without running it.
+Use `cargo build --target-dir .` instead of `cargo run` to build an executable without running it.
 
 For production, use `cargo build --release`.
 
