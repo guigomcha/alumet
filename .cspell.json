@@ -1,5 +1,7 @@
 {
     "version": "0.2",
+    "ignoreWords": [],
+    "enableGlobDot": true,
     "ignorePaths": [
         "*.csv",
         "*.c",
@@ -8,9 +10,12 @@
         "tmp/*",
         "*.toml",
         "*.proto",
-        "*.h"
+        "*.h",
+        ".git/*",
+        ".gitignore",
+        ".github/",
+        ".circleci/"
     ],
-    "ignoreWords": [],
     "import": [
         "@cspell/dict-rust/cspell-ext.json"
     ],
@@ -29,7 +34,8 @@
                 "\\/[\\w.\\-_]+",
                 "[\\w.\\-_]+\\/",
                 "pod[a-zA-Z0-9]+",
-                "\", .*\""
+                "\", .*\"",
+                "JWT"
             ]
         },
         {
@@ -78,6 +84,10 @@
         {
             "name": "string",
             "pattern": "\".*\""
+        },
+        {
+            "name": "JWT",
+            "pattern": "/([A-Za-z0-9+\/]+={0,2}\\.[A-Za-z0-9+\/]+={0,2}\\.[A-Za-z0-9+\/]+={0,2})/g"
         }
     ]
 }

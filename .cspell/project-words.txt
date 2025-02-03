@@ -9,6 +9,7 @@ cgroupv
 cguest
 CNRS
 cpuacct
+Damerau
 desugars
 DTLB
 Eviden
@@ -19,14 +20,17 @@ hwinfo
 hwmon
 ITLB
 Mispredicted
+miri
 monitorable
 mpoint
 NVML
+pagetables
 PERFMON
 POWERCAP
 psys
 Raffin
 RAPL
+regen
 rustfmt
 statm
 subconfig
