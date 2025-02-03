@@ -61,8 +61,8 @@ impl AlumetPlugin for PostProcessingPlugin {
 struct Config {
     append_unit_to_metric_name: bool,
     use_unit_display_name: bool,
-    prefix: Option<String>,
-    suffix: Option<String>,
+    prefix: String,
+    suffix: String,
     // filter_discard
     // filter_accept
 }
@@ -72,8 +72,8 @@ impl Default for Config {
         Self {
             append_unit_to_metric_name: true,
             use_unit_display_name: true,
-            prefix: Some("".to_string()),
-            suffix: Some("".to_string()),
+            prefix: String::from(""),
+            suffix: String::from(""),
             // filter_discard
             // filter_accept
         }

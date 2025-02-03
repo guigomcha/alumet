@@ -15,14 +15,13 @@ use anyhow::Context;
 pub struct PostProcessingTransform {
     pub(crate) append_unit_to_metric_name: bool,
     pub(crate) use_unit_display_name: bool,
-    pub(crate) prefix: Option<String>,
-    pub(crate) suffix: Option<String>
+    pub(crate) prefix: String,
+    pub(crate) suffix: String
 }
 
 impl PostProcessingTransform {
     fn prepare_display_name(&mut self, measurements: &mut MeasurementBuffer, ctx: &TransformContext) {
         for m in measurements.iter_mut() {
-            log::info!("dealing with {:?} and {:?}", m.metric, m.consumer.kind());
             let full_metric = ctx
                 .metrics
                 .by_id(&m.metric)
@@ -43,7 +42,7 @@ impl PostProcessingTransform {
                 full_metric.name.clone()
             };
             // Create the display name based on the previous metric_name and prefix/suffix 
-            m.add_attr(Cow::Owned("display_name".to_string()),alumet::measurement::AttributeValue::String(format!("{}{}{}", self.prefix.as_ref().unwrap(), metric_name, self.suffix.as_ref().unwrap())));            
+            m.add_attr(Cow::Owned("display_name".to_string()),alumet::measurement::AttributeValue::String(format!("{}{}{}", self.prefix, metric_name, self.suffix)));            
         }
     }
 }
