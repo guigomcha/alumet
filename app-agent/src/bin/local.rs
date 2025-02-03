@@ -18,7 +18,7 @@ fn main() {
         plugin_rapl::RaplPlugin,
         plugin_perf::PerfPlugin,
         plugin_procfs::ProcfsPlugin,
-        //plugin_rename_metrics::RenameMetricsPlugin,
+        plugin_post_processing::PostProcessingPlugin,
         plugin_csv::CsvPlugin,
         plugin_socket_control::SocketControlPlugin,
     ];

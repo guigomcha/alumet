@@ -1,5 +1,5 @@
 [package]
-name = "plugin-rename-metrics"
+name = "plugin-post-processing"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,7 @@ edition = "2021"
 alumet = { path = "../alumet" } # LOCAL + NO VERSION
 anyhow = "1.0"
 log = "0.4"
+serde = { version = "1.0.210", features = ["derive"] }
 
 [lints]
 workspace = true
