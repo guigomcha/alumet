@@ -1,11 +1,11 @@
 mod output;
 
 use alumet::plugin::rust::{deserialize_config, serialize_config, AlumetPlugin};
-use output::create_prometheus_instance;
+use output::{PrometheusOutput};
 use serde::{Deserialize, Serialize};
 
 pub struct PrometheusPlugin {
-    config: Option<Config>,
+    config: Config,
 }
 
 impl AlumetPlugin for PrometheusPlugin {
@@ -23,17 +23,23 @@ impl AlumetPlugin for PrometheusPlugin {
 
     fn init(config: alumet::plugin::ConfigTable) -> anyhow::Result<Box<Self>> {
         let config = deserialize_config(config)?;
-        Ok(Box::new(PrometheusPlugin { config: Some(config) }))
+        Ok(Box::new(PrometheusPlugin { config: config }))
     }
 
     fn start(&mut self, alumet: &mut alumet::plugin::AlumetPluginStart) -> anyhow::Result<()> {
-        let config = self.config.take().unwrap();
 
         // Create a new PrometheusOutput instance
-        let prometheus_output = create_prometheus_instance(config.host, config.port)?;
-
+        let output = Box::new(PrometheusOutput::new(
+            self.config.append_unit_to_metric_name,
+            self.config.use_unit_display_name,
+            self.config.add_attributes_to_labels,
+            self.config.port,
+            self.config.host.clone(), 
+            self.config.prefix.clone(),
+            self.config.suffix.clone(),
+        )?);
         // Add output for processing measurements
-        alumet.add_blocking_output(Box::new(prometheus_output));
+        alumet.add_blocking_output(output);
 
         Ok(())
     }
@@ -47,14 +53,24 @@ impl AlumetPlugin for PrometheusPlugin {
 #[serde(deny_unknown_fields)]
 struct Config {
     host: String,
+    prefix: String,
+    suffix: String,
     port: u16,
+    append_unit_to_metric_name: bool,
+    use_unit_display_name: bool,
+    add_attributes_to_labels: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             host: String::from("127.0.0.1"),
+            prefix: String::from(""),
+            suffix: String::from("_alumet"),
             port: 9091,
+            append_unit_to_metric_name: true,
+            use_unit_display_name: true,
+            add_attributes_to_labels: true,
         }
     }
 }

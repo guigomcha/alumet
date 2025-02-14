@@ -1,10 +1,6 @@
 use alumet::{
     measurement::{MeasurementBuffer, WrappedMeasurementValue},
-    pipeline::{
-        elements::{error::WriteError, output::OutputContext},
-        Output,
-    },
-    plugin::rust::AlumetPlugin,
+    pipeline::elements::{error::WriteError, output::OutputContext}
 };
 use anyhow::Context;
 use hyper::{
@@ -28,85 +24,23 @@ pub struct MetricState {
 
 pub struct PrometheusOutput {
     state: MetricState,
+    append_unit_to_metric_name: bool,
+    use_unit_display_name: bool,
+    add_attributes_to_labels: bool,
+    prefix: String,
+    suffix: String,
 }
 
-impl alumet::pipeline::Output for PrometheusOutput {
-    fn write(&mut self, measurements: &MeasurementBuffer, ctx: &OutputContext) -> Result<(), WriteError> {
-        if measurements.is_empty() {
-            return Ok(());
-        }
-
-        let mut metrics = self.state.metrics.write();
-        let mut registry = self.state.registry.write();
-
-        for m in measurements {
-            let metric = ctx.metrics.by_id(&m.metric).unwrap();
-            let metric_name = sanitize_metric_name(&metric.name);
-
-            // Create labels/tags as Vec of tuples for proper label ordering
-            let mut labels = vec![
-                ("resource_kind".to_string(), m.resource.kind().to_string()),
-                ("resource_id".to_string(), m.resource.id_string().unwrap_or_default()),
-                ("resource_consumer_kind".to_string(), m.consumer.kind().to_string()),
-                ("resource_consumer_id".to_string(), m.consumer.id_string().unwrap_or_default()),
-            ];
-
-            // Add attributes as labels
-            for (key, value) in m.attributes() {
-                let key = sanitize_label_name(key);
-                labels.push((key, value.to_string()));
-            }
-
-            // Sort labels for consistent ordering
-            labels.sort_by(|a, b| a.0.cmp(&b.0));
-
-            // Get or create metric family with proper error handling
-            let family = if let Some(family) = metrics.get(&metric_name) {
-                family
-            } else {
-                let family = Family::default();
-                
-                // Just register the metric - if it panics, the mutex guard will be dropped properly
-                registry.register(
-                    metric_name.clone(),
-                    &metric.description,
-                    family.clone(),
-                );
-                
-                metrics.insert(metric_name.clone(), family.clone());
-                metrics.get(&metric_name)
-                    .ok_or_else(|| WriteError::Fatal(
-                        anyhow::anyhow!("Failed to retrieve metric after registration")
-                    ))?
-            };
-
-            // Update metric value
-            let gauge = family.get_or_create(&labels);
-            match m.value {
-                WrappedMeasurementValue::F64(v) => gauge.set(v as i64),
-                WrappedMeasurementValue::U64(v) => gauge.set(v as i64),
-            };
-        }
-
-        Ok(())
-    }
-}
-
-// Helper functions to ensure metric/label names follow Prometheus naming rules
-fn sanitize_metric_name(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
-        .collect()
-}
-
-fn sanitize_label_name(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
-        .collect()
-}
-
-// New function to create a new instance of PrometheusOutput
-pub fn create_prometheus_instance(host: String, port: u16) -> anyhow::Result<PrometheusOutput> {
+impl PrometheusOutput {
+    pub fn new(
+        append_unit_to_metric_name: bool,
+        use_unit_display_name: bool,
+        add_attributes_to_labels: bool,
+        port: u16,
+        host: String,
+        prefix: String,
+        suffix: String,
+    ) -> anyhow::Result<PrometheusOutput> {
     // Create metric state
     let registry = Arc::new(RwLock::new(Registry::default()));
     let metrics = Arc::new(RwLock::new(HashMap::new()));
@@ -156,7 +90,7 @@ pub fn create_prometheus_instance(host: String, port: u16) -> anyhow::Result<Pro
         });
 
         let server = Server::bind(&addr).serve(make_svc);
-        log::info!("Prometheus metrics server listening on http://{}/metrics", addr);
+        log::info!("Prometheus metrics exporter available on http://{}/metrics", addr);
 
         if let Err(e) = server.await {
             log::error!("Prometheus server error: {}", e);
@@ -172,5 +106,108 @@ pub fn create_prometheus_instance(host: String, port: u16) -> anyhow::Result<Pro
         });
     });
 
-    Ok(PrometheusOutput { state })
+    Ok(Self { 
+        state,
+        append_unit_to_metric_name,
+        use_unit_display_name,
+        add_attributes_to_labels,
+        prefix,
+        suffix, 
+    })
+    }
+}
+
+
+impl alumet::pipeline::Output for PrometheusOutput {
+    fn write(&mut self, measurements: &MeasurementBuffer, ctx: &OutputContext) -> Result<(), WriteError> {
+        if measurements.is_empty() {
+            return Ok(());
+        }
+
+        let mut metrics = self.state.metrics.write();
+        let mut registry = self.state.registry.write();
+
+        for m in measurements {
+            let metric = ctx.metrics.by_id(&m.metric).unwrap();
+            // get the full definition of the metric
+            let full_metric = ctx
+                .metrics
+                .by_id(&m.metric)
+                .with_context(|| format!("Unknown metric {:?}", m.metric))?;
+
+            // extract the metric name, appending its unit if configured so
+            let metric_name = format!("{}{}{}", 
+                self.prefix,
+                sanitize_name(if self.append_unit_to_metric_name {
+                    let unit_string = if self.use_unit_display_name {
+                        full_metric.unit.display_name()
+                    } else {
+                        full_metric.unit.unique_name()
+                    };
+                    if unit_string.is_empty() {
+                        full_metric.name.to_owned()
+                    } else {
+                        format!("{}_{}", full_metric.name, unit_string)
+                    }
+                    } else {
+                    full_metric.name.clone()
+                    }),
+                self.suffix
+            );
+
+            // Create labels/tags as Vec of tuples for proper label ordering
+            let mut labels = vec![
+                ("resource_kind".to_string(), m.resource.kind().to_string()),
+                ("resource_id".to_string(), m.resource.id_string().unwrap_or_default()),
+                ("resource_consumer_kind".to_string(), m.consumer.kind().to_string()),
+                ("resource_consumer_id".to_string(), m.consumer.id_string().unwrap_or_default()),
+            ];
+            if self.add_attributes_to_labels {
+                // Add attributes as labels
+                for (key, value) in m.attributes() {
+                    let key = sanitize_name(key.to_owned());
+                    labels.push((key, value.to_string()));
+                }
+            }
+
+            // Sort labels for consistent ordering
+            labels.sort_by(|a, b| a.0.cmp(&b.0));
+
+            // Get or create metric family with proper error handling
+            let family = if let Some(family) = metrics.get(&metric_name) {
+                family
+            } else {
+                let family = Family::default();
+                
+                // Just register the metric - if it panics, the mutex guard will be dropped properly
+                registry.register(
+                    metric_name.clone(),
+                    &metric.description,
+                    family.clone(),
+                );
+                
+                metrics.insert(metric_name.clone(), family.clone());
+                metrics.get(&metric_name)
+                    .ok_or_else(|| WriteError::Fatal(
+                        anyhow::anyhow!("Failed to retrieve metric after registration")
+                    ))?
+            };
+
+            // Update metric value
+            let gauge = family.get_or_create(&labels);
+            match m.value {
+                WrappedMeasurementValue::F64(v) => gauge.set(v as i64),
+                WrappedMeasurementValue::U64(v) => gauge.set(v as i64),
+            };
+        }
+
+        Ok(())
+    }
+}
+
+// Helper functions to ensure metric/label names follow Prometheus naming rules
+fn sanitize_name(name: String) -> String {
+    name.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .collect()
 }
