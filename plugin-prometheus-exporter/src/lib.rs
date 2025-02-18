@@ -1,7 +1,7 @@
 mod output;
 
 use alumet::plugin::rust::{deserialize_config, serialize_config, AlumetPlugin};
-use output::{PrometheusOutput};
+use output::PrometheusOutput;
 use serde::{Deserialize, Serialize};
 
 pub struct PrometheusPlugin {
@@ -27,14 +27,13 @@ impl AlumetPlugin for PrometheusPlugin {
     }
 
     fn start(&mut self, alumet: &mut alumet::plugin::AlumetPluginStart) -> anyhow::Result<()> {
-
         // Create a new PrometheusOutput instance
         let output = Box::new(PrometheusOutput::new(
             self.config.append_unit_to_metric_name,
             self.config.use_unit_display_name,
             self.config.add_attributes_to_labels,
             self.config.port,
-            self.config.host.clone(), 
+            self.config.host.clone(),
             self.config.prefix.clone(),
             self.config.suffix.clone(),
         )?);

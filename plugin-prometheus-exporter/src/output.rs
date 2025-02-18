@@ -1,27 +1,30 @@
 use alumet::{
     measurement::{MeasurementBuffer, WrappedMeasurementValue},
-    pipeline::elements::{error::WriteError, output::OutputContext}
+    pipeline::elements::{error::WriteError, output::OutputContext},
 };
 use anyhow::Context;
+use hyper::http::StatusCode;
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
-use hyper::http::StatusCode;
-use tokio::sync::RwLock;
-use tokio::runtime::Runtime;
 use prometheus_client::{
     encoding::text::encode,
     metrics::{family::Family, gauge::Gauge},
     registry::Registry,
 };
-use std::{collections::HashMap, net::SocketAddr, sync::{atomic::AtomicU64, Arc}};
-
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{atomic::AtomicU64, Arc},
+};
+use tokio::runtime::Runtime;
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct MetricState {
     registry: Arc<RwLock<Registry>>,
-    metrics: Arc<RwLock<HashMap<String, Family<Vec<(String, String)>, Gauge::<f64, AtomicU64>>>>>,
+    metrics: Arc<RwLock<HashMap<String, Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>>>>,
 }
 
 pub struct PrometheusOutput {
@@ -54,7 +57,7 @@ impl PrometheusOutput {
             .context("Invalid host:port configuration")?;
 
         let rt = Runtime::new().context("Failed to create Tokio runtime")?;
-        // Clone the state to pass it down the coroutine      
+        // Clone the state to pass it down the coroutine
         let state_clone = state.clone();
         // Spawn the server on the runtime
         rt.spawn(async move {
@@ -65,10 +68,12 @@ impl PrometheusOutput {
                         let state = state.clone();
                         async move {
                             if req.uri().path() != "/metrics" {
-                                return Ok::<Response<Body>, hyper::Error>(Response::builder()
-                                    .status(StatusCode::NOT_FOUND)
-                                    .body(Body::from("Not Found"))
-                                    .unwrap());
+                                return Ok::<Response<Body>, hyper::Error>(
+                                    Response::builder()
+                                        .status(StatusCode::NOT_FOUND)
+                                        .body(Body::from("Not Found"))
+                                        .unwrap(),
+                                );
                             }
 
                             let mut buf = String::new();
@@ -81,7 +86,10 @@ impl PrometheusOutput {
                             }
 
                             Ok(Response::builder()
-                                .header("Content-Type", "application/openmetrics-text; version=1.0.0; charset=utf-8")
+                                .header(
+                                    "Content-Type",
+                                    "application/openmetrics-text; version=1.0.0; charset=utf-8",
+                                )
                                 .body(Body::from(buf))
                                 .unwrap())
                         }
@@ -129,13 +137,14 @@ impl alumet::pipeline::Output for PrometheusOutput {
 
         for m in measurements {
             let metric = ctx.metrics.by_id(&m.metric).unwrap();
-            
+
             // Configure the name of the metric
             let full_metric = ctx
                 .metrics
                 .by_id(&m.metric)
                 .with_context(|| format!("Unknown metric {:?}", m.metric))?;
-            let metric_name = format!("{}{}{}", 
+            let metric_name = format!(
+                "{}{}{}",
                 self.prefix,
                 sanitize_name(if self.append_unit_to_metric_name {
                     let unit_string = if self.use_unit_display_name {
@@ -148,9 +157,9 @@ impl alumet::pipeline::Output for PrometheusOutput {
                     } else {
                         format!("{}_{}", full_metric.name, unit_string)
                     }
-                    } else {
+                } else {
                     full_metric.name.clone()
-                    }),
+                }),
                 self.suffix
             );
 
@@ -159,7 +168,10 @@ impl alumet::pipeline::Output for PrometheusOutput {
                 ("resource_kind".to_string(), m.resource.kind().to_string()),
                 ("resource_id".to_string(), m.resource.id_string().unwrap_or_default()),
                 ("resource_consumer_kind".to_string(), m.consumer.kind().to_string()),
-                ("resource_consumer_id".to_string(), m.consumer.id_string().unwrap_or_default()),
+                (
+                    "resource_consumer_id".to_string(),
+                    m.consumer.id_string().unwrap_or_default(),
+                ),
             ];
             if self.add_attributes_to_labels {
                 // Add attributes as labels
@@ -170,23 +182,18 @@ impl alumet::pipeline::Output for PrometheusOutput {
             }
             labels.sort_by(|a, b| a.0.cmp(&b.0));
 
-            // Each family vector contains a metric with all associated metrics and differentiated by the labels  
+            // Each family vector contains a metric with all associated metrics and differentiated by the labels
             let family = if let Some(family) = metrics.get(&metric_name) {
                 family
             } else {
-                let family = Family::<Vec<(String, String)>, Gauge::<f64, AtomicU64>>::default();
-                registry.register(
-                    metric_name.clone(),
-                    &metric.description,
-                    family.clone(),
-                );
-                
+                let family = Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default();
+                registry.register(metric_name.clone(), &metric.description, family.clone());
+
                 metrics.insert(metric_name.clone(), family.clone());
                 // Check that it was correctly registered
-                metrics.get(&metric_name)
-                    .ok_or_else(|| WriteError::Fatal(
-                        anyhow::anyhow!("Failed to retrieve metric after registration")
-                    ))?
+                metrics
+                    .get(&metric_name)
+                    .ok_or_else(|| WriteError::Fatal(anyhow::anyhow!("Failed to retrieve metric after registration")))?
             };
 
             // Update metric value
