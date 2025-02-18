@@ -7,6 +7,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
+use hyper::http::StatusCode;
 use tokio::sync::RwLock;
 use tokio::runtime::Runtime;
 use prometheus_client::{
@@ -15,6 +16,7 @@ use prometheus_client::{
     registry::Registry,
 };
 use std::{collections::HashMap, net::SocketAddr, sync::{atomic::AtomicU64, Arc}};
+
 
 #[derive(Clone)]
 pub struct MetricState {
@@ -46,16 +48,14 @@ impl PrometheusOutput {
         let metrics = Arc::new(RwLock::new(HashMap::new()));
         let state = MetricState { registry, metrics };
 
-        // Start HTTP server
+        // Configure the HTTP server to expose the metrics
         let addr: SocketAddr = format!("{}:{}", host, port)
             .parse()
             .context("Invalid host:port configuration")?;
 
-        let state_clone = state.clone();
-
-        // Create a new Tokio runtime for the HTTP server
         let rt = Runtime::new().context("Failed to create Tokio runtime")?;
-
+        // Clone the state to pass it down the coroutine      
+        let state_clone = state.clone();
         // Spawn the server on the runtime
         rt.spawn(async move {
             let make_svc = make_service_fn(move |_conn| {
@@ -66,7 +66,7 @@ impl PrometheusOutput {
                         async move {
                             if req.uri().path() != "/metrics" {
                                 return Ok::<Response<Body>, hyper::Error>(Response::builder()
-                                    .status(404)
+                                    .status(StatusCode::NOT_FOUND)
                                     .body(Body::from("Not Found"))
                                     .unwrap());
                             }
@@ -75,7 +75,7 @@ impl PrometheusOutput {
                             if let Err(e) = encode(&mut buf, &*state.registry.read().await) {
                                 log::error!("Failed to encode metrics: {}", e);
                                 return Ok(Response::builder()
-                                    .status(500)
+                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
                                     .body(Body::from("Internal Server Error"))
                                     .unwrap());
                             }
@@ -97,11 +97,11 @@ impl PrometheusOutput {
             }
         });
 
-        // Keep runtime alive
+        // Keep the thread alive
         std::thread::spawn(move || {
             rt.block_on(async {
                 loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 }
             });
         });
@@ -123,19 +123,18 @@ impl alumet::pipeline::Output for PrometheusOutput {
             return Ok(());
         }
 
-        // Use tokio's async RwLock to handle registry and metrics
+        // Ensure threads reading and writing are handled correctly
         let mut metrics = self.state.metrics.blocking_write();
         let mut registry = self.state.registry.blocking_write();
 
         for m in measurements {
             let metric = ctx.metrics.by_id(&m.metric).unwrap();
-            // get the full definition of the metric
+            
+            // Configure the name of the metric
             let full_metric = ctx
                 .metrics
                 .by_id(&m.metric)
                 .with_context(|| format!("Unknown metric {:?}", m.metric))?;
-
-            // extract the metric name, appending its unit if configured so
             let metric_name = format!("{}{}{}", 
                 self.prefix,
                 sanitize_name(if self.append_unit_to_metric_name {
@@ -155,7 +154,7 @@ impl alumet::pipeline::Output for PrometheusOutput {
                 self.suffix
             );
 
-            // Create labels/tags as Vec of tuples for proper label ordering
+            // Create the default labels for all metrics and optionally add attributes
             let mut labels = vec![
                 ("resource_kind".to_string(), m.resource.kind().to_string()),
                 ("resource_id".to_string(), m.resource.id_string().unwrap_or_default()),
@@ -169,17 +168,13 @@ impl alumet::pipeline::Output for PrometheusOutput {
                     labels.push((key, value.to_string()));
                 }
             }
-
-            // Sort labels for consistent ordering
             labels.sort_by(|a, b| a.0.cmp(&b.0));
 
-            // Get or create metric family with proper error handling
+            // Each family vector contains a metric with all associated metrics and differentiated by the labels  
             let family = if let Some(family) = metrics.get(&metric_name) {
                 family
             } else {
                 let family = Family::<Vec<(String, String)>, Gauge::<f64, AtomicU64>>::default();
-                
-                // Just register the metric - if it panics, the mutex guard will be dropped properly
                 registry.register(
                     metric_name.clone(),
                     &metric.description,
@@ -187,6 +182,7 @@ impl alumet::pipeline::Output for PrometheusOutput {
                 );
                 
                 metrics.insert(metric_name.clone(), family.clone());
+                // Check that it was correctly registered
                 metrics.get(&metric_name)
                     .ok_or_else(|| WriteError::Fatal(
                         anyhow::anyhow!("Failed to retrieve metric after registration")
