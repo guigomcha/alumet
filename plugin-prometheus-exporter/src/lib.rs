@@ -64,7 +64,7 @@ struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            host: String::from("127.0.0.1"),
+            host: String::from("0.0.0.0"),
             prefix: String::from(""),
             suffix: String::from("_alumet"),
             port: 9091,

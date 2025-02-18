@@ -14,12 +14,12 @@ use prometheus_client::{
     metrics::{family::Family, gauge::Gauge},
     registry::Registry,
 };
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::{atomic::AtomicU64, Arc}};
 
 #[derive(Clone)]
 pub struct MetricState {
     registry: Arc<RwLock<Registry>>,
-    metrics: Arc<RwLock<HashMap<String, Family<Vec<(String, String)>, Gauge>>>>,
+    metrics: Arc<RwLock<HashMap<String, Family<Vec<(String, String)>, Gauge::<f64, AtomicU64>>>>>,
 }
 
 pub struct PrometheusOutput {
@@ -177,7 +177,7 @@ impl alumet::pipeline::Output for PrometheusOutput {
             let family = if let Some(family) = metrics.get(&metric_name) {
                 family
             } else {
-                let family = Family::default();
+                let family = Family::<Vec<(String, String)>, Gauge::<f64, AtomicU64>>::default();
                 
                 // Just register the metric - if it panics, the mutex guard will be dropped properly
                 registry.register(
@@ -196,8 +196,8 @@ impl alumet::pipeline::Output for PrometheusOutput {
             // Update metric value
             let gauge = family.get_or_create(&labels);
             match m.value {
-                WrappedMeasurementValue::F64(v) => gauge.set(v as i64),
-                WrappedMeasurementValue::U64(v) => gauge.set(v as i64),
+                WrappedMeasurementValue::F64(v) => gauge.set(v as f64),
+                WrappedMeasurementValue::U64(v) => gauge.set(v as f64),
             };
         }
 
