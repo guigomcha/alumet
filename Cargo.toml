@@ -12,6 +12,7 @@ members = [
     "plugin-influxdb",
     "plugin-nvidia",
     "plugin-oar2",
+    "plugin-opentelemetry",
     "plugin-perf",
     "plugin-procfs",
     "plugin-rapl",
