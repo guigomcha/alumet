@@ -10,10 +10,39 @@ The plugin has been tested on a NUC with the default configuration.
 
 ### Opentelemetry demo
 
-The connection to the Opentelemetry Collector was done following the [official tutorial](https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-otlp/examples/basic-otlp-http).
+The connection to the Opentelemetry Collector was done following the [official data prepper tutorial](https://github.com/opensearch-project/data-prepper/tree/main/examples/metrics-ingestion-otel).
 
-For the demo, the "stress --cpu 8 --io 4 --vm 2 --vm-bytes 128M" command was used to ensure that data was pulled correctly.
+Notes:
+- For clarity, I disconnected traces and metrics from other sources to better visualize in OpenSearch.
+- Also, the "logging" exporter is deprecated and needs to be updated.
 
-![demo](./docs/otel-demo.png)
+```yaml # data-prepper/examples/metrics-ingestion-otel/otel-collector-config.yml
+receivers:
+  # hostmetrics:
+  #   collection_interval: 60s
+  #   scrapers:
+  #     cpu:
+  #     memory:
+  # prometheus:
+  #   config:
+  #     scrape_configs:
+  #       - job_name: data-prepper
+  #         metrics_path: /metrics/sys
+  #         scrape_interval: 60s
+  #         static_configs:
+  #           - targets: ['data-prepper:4900']
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  debug: # Appears as "logging" 
+    verbosity: detailed
+```
+
+![demo](./docs/otel-opensearch-demo.png)
 
 ## Next

@@ -29,8 +29,6 @@ use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct OpentelemetryOutput {
-    scope: InstrumentationScope,
-    pub meter_provider: SdkMeterProvider,
     append_unit_to_metric_name: bool,
     use_unit_display_name: bool,
     add_attributes_to_labels: bool,
@@ -42,7 +40,7 @@ fn get_resource() -> Resource {
     RESOURCE
         .get_or_init(|| {
             Resource::builder()
-                .with_service_name("basic-otlp-example-grpc")
+                .with_service_name("alumet-otlp-grpc")
                 .build()
         })
         .clone()
@@ -70,18 +68,9 @@ impl OpentelemetryOutput {
         prefix: String,
         suffix: String,
     ) -> anyhow::Result<OpentelemetryOutput> {
-        let meter_provider = init_metrics();
-        global::set_meter_provider(meter_provider.clone());
-        log::info!("Created meter provider {:?}", meter_provider);
-        let common_scope_attributes = vec![KeyValue::new("scope-key", "scope-value")];
-        let scope = InstrumentationScope::builder("basic")
-            .with_version("1.0")
-            .with_attributes(common_scope_attributes)
-            .build();
+
 
         Ok(Self {
-            scope,
-            meter_provider,
             append_unit_to_metric_name,
             use_unit_display_name,
             add_attributes_to_labels,
@@ -97,13 +86,17 @@ impl alumet::pipeline::Output for OpentelemetryOutput {
         if measurements.is_empty() {
             return Ok(());
         }
-
+        // Needs to be created inside the tokio thread
+        let meter_provider = init_metrics();
+        global::set_meter_provider(meter_provider.clone());
+        let common_scope_attributes = vec![KeyValue::new("tool", "alumet")];
+        let scope = InstrumentationScope::builder("alumet")
+            .with_version("1.0")
+            .with_attributes(common_scope_attributes)
+            .build();
 
         for m in measurements {
-
             let metric = ctx.metrics.by_id(&m.metric).unwrap().clone();
-            
-
             // Configure the name of the metric
             let full_metric = ctx
                 .metrics
@@ -148,12 +141,11 @@ impl alumet::pipeline::Output for OpentelemetryOutput {
             }
             labels.sort_by(|a, b| a.key.cmp(&b.key));
 
-
-            let meter = global::meter_with_scope(self.scope.clone());
-
+            // Prepare the meter provider 
+            let meter = global::meter_with_scope(scope.clone());
             let gauge = meter
                 .f64_gauge(metric_name)
-                .with_description(metric.description)
+                .with_description(metric.description.to_string())
                 .with_unit(metric.unit.display_name())
                 .build();
             match m.value {
