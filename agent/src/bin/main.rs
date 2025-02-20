@@ -24,11 +24,7 @@ fn load_plugins_metadata() -> Vec<PluginMetadata> {
     // plugins that work on every target
     let mut plugins = static_plugins![
         plugin_csv::CsvPlugin,
-        plugin_prometheus_exporter::PrometheusPlugin,
-        plugin_influxdb::InfluxDbPlugin,
-        plugin_mongodb::MongoDbPlugin,
-        plugin_relay::client::RelayClientPlugin,
-        plugin_relay::server::RelayServerPlugin,
+        plugin_opentelemetry::OpentelemetryPlugin,
     ];
 
     // plugins that only work on Linux
