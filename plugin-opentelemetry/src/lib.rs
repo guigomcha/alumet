@@ -44,7 +44,6 @@ impl AlumetPlugin for OpentelemetryPlugin {
     }
 
     fn stop(&mut self) -> anyhow::Result<()> {
-        self.output.meter_provider.shutdown()?;
         Ok(())
     }
 }
