@@ -39,7 +39,7 @@ pub mod plugin;
 pub mod resources;
 pub mod units;
 
-#[cfg(feature = "dynamic")]
-mod ffi;
+#[cfg(feature = "test")]
+pub mod test;
 
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");

@@ -8,12 +8,12 @@ use std::{
 use anyhow::Context;
 
 use crate::{
-    pipeline::{control::ControlMessage, matching::TypedElementSelector, MeasurementPipeline},
+    pipeline::{control::ControlMessage, naming::matching::SourceNamePattern, MeasurementPipeline},
     plugin::event::StartConsumerMeasurement,
     resources::ResourceConsumer,
 };
 
-use super::RunningAgent;
+use super::{builder::ShutdownError, RunningAgent};
 use thiserror::Error;
 
 /// Error that can occur in [`watch_process`].
@@ -25,12 +25,9 @@ pub enum WatchError {
     /// The process has spawned but waiting for it has failed.
     #[error("failed to wait for pid {0}")]
     ProcessWait(u32, #[source] std::io::Error),
-    /// An error occurred while waiting for the measurement pipeline to shut down.
-    ///
-    /// The error probably originated from inside a pipeline element (source, transform, output)
-    /// and not from the shutdown operation.
-    #[error("error in pipeline")]
-    PipelineShutdown(#[source] anyhow::Error),
+    /// An error occurred while waiting for the agent to shut down.
+    #[error("error in shutdown")]
+    Shutdown(#[source] ShutdownError),
 }
 
 /// Spawns a process that runs `program args` and stops the measurement agent when it exits.
@@ -60,9 +57,7 @@ pub fn watch_process(
 
     // Stop the pipeline
     agent.pipeline.control_handle().shutdown();
-    agent
-        .wait_for_shutdown(shutdown_timeout)
-        .map_err(WatchError::PipelineShutdown)
+    agent.wait_for_shutdown(shutdown_timeout).map_err(WatchError::Shutdown)
 }
 
 /// Spawns a child process and waits for it to exit.
@@ -89,11 +84,11 @@ fn trigger_measurement_now(pipeline: &MeasurementPipeline) -> anyhow::Result<()>
     use crate::pipeline::elements::source;
 
     let control_handle = pipeline.control_handle();
-    let send_task = control_handle.send(ControlMessage::Source(source::ControlMessage::TriggerManually(
-        source::TriggerMessage {
-            selector: TypedElementSelector::all(),
-        },
-    )));
+    let send_task = control_handle.send(ControlMessage::Source(
+        source::control::ControlMessage::TriggerManually(source::control::TriggerMessage {
+            matcher: SourceNamePattern::wildcard().into(),
+        }),
+    ));
     pipeline
         .async_runtime()
         .block_on(send_task)

@@ -1,7 +1,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use alumet::{
-    pipeline::{trigger, Source},
+    pipeline::elements::source::{trigger, Source},
     plugin::{
         rust::{deserialize_config, serialize_config, AlumetPlugin},
         ConfigTable,
@@ -167,7 +167,7 @@ impl AlumetPlugin for RaplPlugin {
             .update_interval(self.config.flush_interval)
             .build()
             .unwrap();
-        alumet.add_source(source, trigger);
+        alumet.add_source("in", source, trigger)?;
         Ok(())
     }
 

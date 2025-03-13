@@ -1,7 +1,8 @@
 use alumet::{
     measurement::{MeasurementAccumulator, MeasurementPoint, Timestamp},
     metrics::TypedMetricId,
-    pipeline::{control::ScopedControlHandle, elements::error::PollError, trigger::TriggerSpec, Source},
+    pipeline::elements::source::trigger::TriggerSpec,
+    pipeline::{control::ScopedControlHandle, elements::error::PollError, Source},
     plugin::{
         rust::{deserialize_config, serialize_config, AlumetPlugin},
         AlumetPluginStart, AlumetPostStart, ConfigTable,
@@ -129,8 +130,14 @@ impl AlumetPlugin for Oar2Plugin {
                     memory_file_path,
                     job_id,
                 });
-
-                alumet.add_source(initial_source, TriggerSpec::at_interval(self.config.poll_interval));
+                let source_name = &job_name;
+                alumet
+                    .add_source(
+                        source_name,
+                        initial_source,
+                        TriggerSpec::at_interval(self.config.poll_interval),
+                    )
+                    .expect("no duplicate job");
             }
         }
         Ok(())

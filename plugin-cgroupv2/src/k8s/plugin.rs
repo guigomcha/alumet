@@ -1,5 +1,6 @@
 use alumet::{
-    pipeline::{control::ScopedControlHandle, trigger::TriggerSpec},
+    pipeline::control::ScopedControlHandle,
+    pipeline::elements::source::trigger::TriggerSpec,
     plugin::{
         rust::{deserialize_config, serialize_config, AlumetPlugin},
         util::CounterDiff,
@@ -107,6 +108,7 @@ impl AlumetPlugin for K8sPlugin {
             let counter_tmp_usr = CounterDiff::with_max_value(crate::cgroupv2::CGROUP_MAX_TIME_COUNTER);
             let counter_tmp_sys = CounterDiff::with_max_value(crate::cgroupv2::CGROUP_MAX_TIME_COUNTER);
 
+            let source_name = format!("pod:{}_{}_{}", metric_file.namespace, metric_file.name, metric_file.uid);
             let probe = K8SProbe::new(
                 self.metrics.as_ref().expect("Metrics is not available").clone(),
                 metric_file,
@@ -114,7 +116,13 @@ impl AlumetPlugin for K8sPlugin {
                 counter_tmp_sys,
                 counter_tmp_usr,
             )?;
-            alumet.add_source(Box::new(probe), TriggerSpec::at_interval(self.config.poll_interval));
+            alumet
+                .add_source(
+                    &source_name,
+                    Box::new(probe),
+                    TriggerSpec::at_interval(self.config.poll_interval),
+                )
+                .expect("source names should be unique (in the plugin)");
         }
 
         Ok(())
