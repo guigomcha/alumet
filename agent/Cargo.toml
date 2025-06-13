@@ -18,6 +18,8 @@ serde = { version = "1.0.210", features = ["derive"] }
 tokio = { version = "1.40.0", features = ["rt"] }
 toml = "0.8.19"
 thiserror = "2.0.11"
+# Needed for ARM build
+openssl = { version = "0.10", features = ["vendored"] }
 
 # Plugins that are available for every target
 plugin-csv = { path = "../plugin-csv" }
