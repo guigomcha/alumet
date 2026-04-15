@@ -1,6 +1,6 @@
 use alumet::{
     measurement::WrappedMeasurementType,
-    metrics::{Metric, duplicate::DuplicateReaction},
+    metrics::{Metric, MetricType, duplicate::DuplicateReaction},
     plugin::rust::AlumetPlugin,
     units::Unit,
 };
@@ -45,24 +45,28 @@ impl AlumetPlugin for TestPlugin {
             description: "".to_owned(),
             value_type: WrappedMeasurementType::U64,
             unit: Unit::Second.into(),
+            metric_type: MetricType::Gauge,
         };
         let m2 = Metric {
             name: "m2".to_owned(),
             description: "".to_owned(),
             value_type: WrappedMeasurementType::U64, // bad
             unit: Unit::Second.into(),
+            metric_type: MetricType::Gauge,
         };
         let m3 = Metric {
             name: "m3".to_owned(),
             description: "".to_owned(),
             value_type: WrappedMeasurementType::U64,
             unit: Unit::Second.into(), // bad
+            metric_type: MetricType::Gauge,
         };
         let m4 = Metric {
             name: "m4".to_owned(), // new metric
             description: "".to_owned(),
             value_type: WrappedMeasurementType::F64,
             unit: Unit::Watt.into(),
+            metric_type: MetricType::Gauge,
         };
 
         // Attempt to create these 4 metrics. Only m2 and m3 should succeed.

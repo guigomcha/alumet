@@ -6,4 +6,4 @@ pub mod error;
 pub mod online;
 pub mod registry;
 
-pub use def::{Metric, RawMetricId, TypedMetricId};
+pub use def::{Metric, MetricType, RawMetricId, TypedMetricId};

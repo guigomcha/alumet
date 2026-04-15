@@ -1,10 +1,14 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 
-use crate::measurement::{MeasurementBuffer, Timestamp};
+use crate::measurement::{AttributeValue, MeasurementBuffer, Timestamp};
+use crate::metrics::MetricType;
+use crate::metrics::def::RawMetricId;
+use crate::metrics::online::MetricReader;
 use crate::pipeline::error::PipelineError;
 use crate::pipeline::naming::SourceName;
 use crate::pipeline::util::coop::TriggerCoop;
@@ -19,6 +23,7 @@ pub(crate) async fn run_managed(
     mut source: Box<dyn Source>,
     tx: mpsc::Sender<MeasurementBuffer>,
     config: Arc<super::task_controller::SharedSourceConfig>,
+    metrics_reader: MetricReader,
 ) -> Result<(), PipelineError> {
     /// Flushes the measurement and returns a new buffer.
     async fn flush(
@@ -91,6 +96,10 @@ pub(crate) async fn run_managed(
     let mut coop = TriggerCoop::new();
     let mut trigger = init_trigger;
 
+    // Cache: maps RawMetricId -> whether it is a CounterDiff metric.
+    // Populated lazily when new metric IDs are observed.
+    let mut counter_diff_cache: HashMap<RawMetricId, bool> = HashMap::new();
+
     let mut run = false;
     while !run {
         let initial_state = config.atomic_state.load(Ordering::Relaxed);
@@ -135,6 +144,7 @@ pub(crate) async fn run_managed(
             TriggerReason::Triggered => {
                 // poll the source
                 let timestamp = Timestamp::now();
+                let len_before = buffer.len();
                 match source.poll(&mut buffer.as_accumulator(), timestamp) {
                     Ok(()) => (),
                     Err(PollError::NormalStop) => {
@@ -149,6 +159,35 @@ pub(crate) async fn run_managed(
                         return Err(PipelineError::for_element(source_name, e));
                     }
                 };
+
+                // Annotate newly added CounterDiff measurements with the current poll_interval.
+                let new_len = buffer.len();
+                if new_len > len_before {
+                    if let Some(interval) = trigger.poll_interval() {
+                        // Check if any newly observed metric IDs need a cache entry.
+                        let has_unknown = buffer
+                            .iter()
+                            .skip(len_before)
+                            .any(|p| !counter_diff_cache.contains_key(&p.metric));
+                        if has_unknown {
+                            let metrics = metrics_reader.read().await;
+                            for point in buffer.iter().skip(len_before) {
+                                counter_diff_cache.entry(point.metric).or_insert_with(|| {
+                                    metrics
+                                        .by_id(&point.metric)
+                                        .map(|m| m.metric_type == MetricType::CounterDiff)
+                                        .unwrap_or(false)
+                                });
+                            }
+                        }
+                        let interval_nanos = interval.as_nanos() as u64;
+                        for point in buffer.iter_mut().skip(len_before) {
+                            if counter_diff_cache.get(&point.metric).copied().unwrap_or(false) {
+                                point.add_attr("poll_interval", AttributeValue::U64(interval_nanos));
+                            }
+                        }
+                    }
+                }
 
                 // Flush the measurements, not on every round for performance reasons.
                 // This is done _after_ polling, to ensure that we poll at least once before flushing, even if flush_rounds is 1.

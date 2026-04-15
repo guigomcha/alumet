@@ -78,6 +78,7 @@ impl AlumetPlugin for AggregationPlugin {
                 unit: metric.unit.clone(),
                 description: metric.description.clone(),
                 value_type: metric.value_type.clone(),
+                metric_type: metric.metric_type.clone(),
             };
 
             self.metrics_list.push(new_metric);

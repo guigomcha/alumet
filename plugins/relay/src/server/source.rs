@@ -1,6 +1,6 @@
 use std::{future::Future, net::SocketAddr};
 
-use alumet::{measurement::MeasurementBuffer, metrics::Metric, metrics::online::MetricSender};
+use alumet::{measurement::MeasurementBuffer, metrics::{Metric, MetricType}, metrics::online::MetricSender};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc,
@@ -76,6 +76,7 @@ impl TcpSource {
                         description: String::from("remote metric via plugin_relay"),
                         value_type: protocol_metric.value_type.try_into()?,
                         unit: protocol_metric.unit.try_into()?,
+                        metric_type: MetricType::Gauge,
                     };
                     metric_defs.push(alumet_metric);
                     metric_ids.push(protocol_metric.id);

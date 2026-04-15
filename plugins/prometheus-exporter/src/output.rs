@@ -176,7 +176,7 @@ fn get_unit_string(full_metric: &Metric) -> String {
 mod tests {
     use alumet::{
         measurement::WrappedMeasurementType,
-        metrics::Metric,
+        metrics::{Metric, MetricType},
         units::{PrefixedUnit, Unit, UnitPrefix},
     };
 
@@ -201,6 +201,7 @@ mod tests {
                     base_unit: unit,
                     prefix: prefix,
                 },
+                metric_type: MetricType::Gauge,
             }
         }
 

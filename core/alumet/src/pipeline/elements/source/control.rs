@@ -162,7 +162,7 @@ impl SourceControl {
             };
             let full_name = SourceName::new(plugin.clone(), name);
             self.tasks
-                .create_source(&mut ctx, full_name, builder)
+                .create_source(&mut ctx, full_name, builder, self.metrics.0.clone())
                 .inspect_err(|e| {
                     log::error!("Error in source creation requested by plugin {plugin}: {e:#}");
                 })?;
@@ -191,7 +191,7 @@ impl SourceControl {
         for (name, builder) in builders {
             let _ = self
                 .tasks
-                .create_source(&mut ctx, name.clone(), builder.into())
+                .create_source(&mut ctx, name.clone(), builder.into(), self.metrics.0.clone())
                 .inspect_err(|e| {
                     log::error!("Error while creating source '{name}': {e:?}");
                     n_errors += 1;
@@ -273,6 +273,7 @@ impl TaskManager {
         ctx: &mut builder::BuildContext,
         name: SourceName,
         builder: builder::SourceBuilder,
+        metrics_reader: MetricReader,
     ) -> anyhow::Result<()> {
         /// Spawns a task on a JoinSet.
         /// When built with tokio unstable features, give a name to the task.
@@ -354,7 +355,13 @@ impl TaskManager {
                 log::trace!("new controller initialized");
 
                 // Create the future (async task).
-                let source_task = run_managed(name.clone(), source.source, self.in_tx.clone(), config);
+                let source_task = run_managed(
+                    name.clone(),
+                    source.source,
+                    self.in_tx.clone(),
+                    config,
+                    metrics_reader,
+                );
                 log::trace!("source task created: {name}");
 
                 match pace {

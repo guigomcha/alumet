@@ -37,13 +37,13 @@ pub enum DuplicateReaction {
 /// Checks whether two metric definitions are compatible.
 ///
 /// # Compatible metrics
-/// Two metric definitions are compatible if they have the same name, unit and value type.
-/// The description is ignored.
+/// Two metric definitions are compatible if they have the same name, unit, value type,
+/// and semantic metric type. The description is ignored.
 ///
 /// # Transitivity
 /// This relation is transitive: `are_compatible(a, b) == are_compatible(b, a)`
 pub(super) fn are_compatible(m1: &Metric, m2: &Metric) -> bool {
-    m1.name == m2.name && m1.unit == m2.unit && m1.value_type == m2.value_type
+    m1.name == m2.name && m1.unit == m2.unit && m1.value_type == m2.value_type && m1.metric_type == m2.metric_type
 }
 
 /// Checks whether two metric definitions are identical, that is, whether all their fields are equal.
