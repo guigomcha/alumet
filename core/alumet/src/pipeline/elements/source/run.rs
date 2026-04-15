@@ -164,22 +164,34 @@ pub(crate) async fn run_managed(
                 let new_len = buffer.len();
                 if new_len > len_before {
                     if let Some(interval) = trigger.poll_interval() {
-                        // Check if any newly observed metric IDs need a cache entry.
-                        let has_unknown = buffer
+                        // Collect all metric IDs not yet in the cache, in a single pass.
+                        let unknown_ids: Vec<RawMetricId> = buffer
                             .iter()
                             .skip(len_before)
-                            .any(|p| !counter_diff_cache.contains_key(&p.metric));
-                        if has_unknown {
+                            .filter_map(|p| {
+                                if counter_diff_cache.contains_key(&p.metric) {
+                                    None
+                                } else {
+                                    Some(p.metric)
+                                }
+                            })
+                            .collect::<std::collections::HashSet<_>>()
+                            .into_iter()
+                            .collect();
+
+                        // Acquire the registry lock once to resolve all unknown IDs.
+                        if !unknown_ids.is_empty() {
                             let metrics = metrics_reader.read().await;
-                            for point in buffer.iter().skip(len_before) {
-                                counter_diff_cache.entry(point.metric).or_insert_with(|| {
-                                    metrics
-                                        .by_id(&point.metric)
-                                        .map(|m| m.metric_type == MetricType::CounterDiff)
-                                        .unwrap_or(false)
-                                });
+                            for id in unknown_ids {
+                                let is_counter_diff = metrics
+                                    .by_id(&id)
+                                    .map(|m| m.metric_type == MetricType::CounterDiff)
+                                    .unwrap_or(false);
+                                counter_diff_cache.insert(id, is_counter_diff);
                             }
                         }
+
+                        // Annotate newly added points that belong to CounterDiff metrics.
                         let interval_nanos = interval.as_nanos() as u64;
                         for point in buffer.iter_mut().skip(len_before) {
                             if counter_diff_cache.get(&point.metric).copied().unwrap_or(false) {
