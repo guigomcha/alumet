@@ -177,6 +177,7 @@ impl MetricRegistry {
             // Information needed to compare metrics.
             let unit = metric.unit.clone();
             let value_type = metric.value_type.clone();
+            let metric_type = metric.metric_type.clone();
 
             // The metric name is modified by this function.
             let mut buf = &mut metric.name;
@@ -184,7 +185,13 @@ impl MetricRegistry {
             // First try: simply append the suffix with an underscore
             write!(&mut buf, "_{dedup_suffix}").expect("dedup_suffix should be writable to metric name");
             match reg.by_name(buf) {
-                Some((id, existing)) if existing.unit == unit && existing.value_type == value_type => id,
+                Some((id, existing))
+                    if existing.unit == unit
+                        && existing.value_type == value_type
+                        && existing.metric_type == metric_type =>
+                {
+                    id
+                }
                 Some((_id, _conflict)) => {
                     // Second try: append "_2"
                     buf.push_str("_2");
@@ -193,7 +200,7 @@ impl MetricRegistry {
                     let mut existing = reg.by_name(buf);
                     while existing.is_some() {
                         let (id, other) = existing.unwrap();
-                        if other.unit == unit && other.value_type == value_type {
+                        if other.unit == unit && other.value_type == value_type && other.metric_type == metric_type {
                             // identical to the existing metric, stop here
                             return id;
                         }
@@ -252,6 +259,7 @@ mod tests {
     use crate::{
         measurement::WrappedMeasurementType,
         metrics::{
+            MetricType,
             def::Metric,
             duplicate::{DuplicateCriteria, DuplicateReaction},
         },
@@ -271,6 +279,7 @@ mod tests {
                     description: "...".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Watt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Strict,
             )
@@ -282,6 +291,7 @@ mod tests {
                     description: "abcd".to_owned(),
                     value_type: WrappedMeasurementType::F64,
                     unit: Unit::Volt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Strict,
             )
@@ -300,6 +310,7 @@ mod tests {
                     description: "".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Watt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Strict,
                 DuplicateReaction::Error,
@@ -312,6 +323,7 @@ mod tests {
                     description: "".to_owned(),
                     value_type: WrappedMeasurementType::F64,
                     unit: Unit::Watt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Strict,
                 DuplicateReaction::Error,
@@ -324,6 +336,7 @@ mod tests {
                     description: "".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Second.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Incompatible,
                 DuplicateReaction::Rename {
@@ -365,6 +378,7 @@ mod tests {
                     description: "...".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Watt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Strict,
                 "suffix",
@@ -380,6 +394,7 @@ mod tests {
                     description: "...".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Watt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Different,
                 "suffix",
@@ -396,6 +411,7 @@ mod tests {
                     description: "...".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Watt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Strict,
                 "suffix",
@@ -413,6 +429,7 @@ mod tests {
                     description: "abcd".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Watt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Incompatible,
                 "suffix",
@@ -430,6 +447,7 @@ mod tests {
                     description: "...".to_owned(),
                     value_type: WrappedMeasurementType::F64,
                     unit: Unit::Watt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Incompatible,
                 "suffix",
@@ -446,6 +464,7 @@ mod tests {
                     description: "...".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Byte.into(), // Byte instead of Watt
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Incompatible,
                 "suffix",
@@ -459,6 +478,7 @@ mod tests {
                     description: "xyz".to_owned(),
                     value_type: WrappedMeasurementType::U64, // U64 instead of F64
                     unit: Unit::Volt.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Strict,
                 "suffix",
@@ -484,6 +504,7 @@ mod tests {
                     description: "not the same".to_owned(),
                     value_type: WrappedMeasurementType::U64,
                     unit: Unit::Second.into(),
+                    metric_type: MetricType::Gauge,
                 },
                 DuplicateCriteria::Strict,
                 "suffix",

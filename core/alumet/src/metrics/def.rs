@@ -5,6 +5,7 @@
 //! - a description
 //! - a type of measured value
 //! - a measurement unit
+//! - a semantic metric type (e.g. [`MetricType::Gauge`] or [`MetricType::CounterDiff`])
 //!
 //! This information is stored in the [`Metric`] struct.
 //!
@@ -47,6 +48,30 @@ use crate::units::PrefixedUnit;
 use super::error::MetricTypeError;
 use super::registry::MetricRegistry;
 
+/// The semantic type of a metric, indicating how its values should be interpreted.
+///
+/// The default type is [`MetricType::Gauge`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MetricType {
+    /// The metric value is a direct instantaneous measurement (e.g. current CPU usage in %).
+    ///
+    /// This is the default.
+    Gauge,
+    /// The metric value is the difference between two successive readings of a monotonically
+    /// increasing counter (e.g. energy consumed since the previous measurement).
+    ///
+    /// For `CounterDiff` metrics, the core pipeline automatically adds a `poll_interval`
+    /// attribute (in nanoseconds) to every measurement point produced by a managed source,
+    /// so that consumers can compute rates (e.g. power from energy).
+    CounterDiff,
+}
+
+impl Default for MetricType {
+    fn default() -> Self {
+        MetricType::Gauge
+    }
+}
+
 /// The complete definition of a metric (without its id).
 ///
 /// To register new metrics from your plugin, use
@@ -64,6 +89,10 @@ pub struct Metric {
     pub value_type: WrappedMeasurementType,
     /// Unit that applies to all the measurements of this metric.
     pub unit: PrefixedUnit,
+    /// The semantic type of this metric (gauge or counter-diff).
+    ///
+    /// Defaults to [`MetricType::Gauge`].
+    pub metric_type: MetricType,
 }
 
 /// Trait for both typed and untyped metric ids.

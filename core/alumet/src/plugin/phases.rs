@@ -3,7 +3,7 @@ use std::future::Future;
 use std::marker::PhantomData;
 
 use crate::measurement::{MeasurementType, WrappedMeasurementType};
-use crate::metrics::def::{Metric, RawMetricId, TypedMetricId};
+use crate::metrics::def::{Metric, MetricType, RawMetricId, TypedMetricId};
 use crate::metrics::duplicate::{DuplicateCriteria, DuplicateReaction};
 use crate::metrics::error::MetricCreationError;
 use crate::metrics::online::listener::{MetricListener, MetricListenerBuilder};
@@ -74,6 +74,35 @@ impl<'a> AlumetPluginStart<'a> {
             description: description.into(),
             value_type: T::wrapped_type(),
             unit: unit.into(),
+            metric_type: MetricType::Gauge,
+        };
+        let untyped_id =
+            self.pipeline_builder
+                .metrics
+                .register(m, DuplicateCriteria::Incompatible, DuplicateReaction::Error)?;
+        Ok(TypedMetricId(untyped_id, PhantomData))
+    }
+
+    /// Creates a new [`MetricType::CounterDiff`] metric with a measurement type `T` (checked at
+    /// compile time).
+    ///
+    /// Use this when the metric value is the difference between two successive readings of a
+    /// monotonically increasing counter (e.g. energy consumed since the last poll).
+    ///
+    /// The core pipeline will automatically attach a `poll_interval` attribute (nanoseconds) to
+    /// every measurement point produced by a managed source for this metric.
+    pub fn create_metric_counter_diff<T: MeasurementType>(
+        &mut self,
+        name: impl Into<String>,
+        unit: impl Into<PrefixedUnit>,
+        description: impl Into<String>,
+    ) -> Result<TypedMetricId<T>, MetricCreationError> {
+        let m = Metric {
+            name: name.into(),
+            description: description.into(),
+            value_type: T::wrapped_type(),
+            unit: unit.into(),
+            metric_type: MetricType::CounterDiff,
         };
         let untyped_id =
             self.pipeline_builder
@@ -100,6 +129,30 @@ impl<'a> AlumetPluginStart<'a> {
             description: description.to_owned(),
             value_type,
             unit: unit.into(),
+            metric_type: MetricType::Gauge,
+        };
+        self.pipeline_builder
+            .metrics
+            .register(m, DuplicateCriteria::Incompatible, DuplicateReaction::Error)
+    }
+
+    /// Creates a new [`MetricType::CounterDiff`] metric with a measurement type `value_type`
+    /// (checked at **run time**).
+    ///
+    /// See [`create_metric_counter_diff`](Self::create_metric_counter_diff) for the typed variant.
+    pub fn create_metric_untyped_counter_diff(
+        &mut self,
+        name: &str,
+        value_type: WrappedMeasurementType,
+        unit: impl Into<PrefixedUnit>,
+        description: &str,
+    ) -> Result<RawMetricId, MetricCreationError> {
+        let m = Metric {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            value_type,
+            unit: unit.into(),
+            metric_type: MetricType::CounterDiff,
         };
         self.pipeline_builder
             .metrics

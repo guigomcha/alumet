@@ -18,7 +18,7 @@ use crate::{
     agent::builder::TestExpectations,
     measurement::{MeasurementBuffer, MeasurementPoint, MeasurementType},
     metrics::{
-        Metric, RawMetricId,
+        Metric, MetricType, RawMetricId,
         duplicate::{DuplicateCriteria, DuplicateReaction},
         error::MetricCreationError,
         online::MetricReader,
@@ -612,6 +612,7 @@ impl RuntimeExpectations {
             description: "".into(),
             value_type: T::wrapped_type(),
             unit: unit.into(),
+            metric_type: MetricType::Gauge,
         };
         self.metrics_to_create.push(m);
         self

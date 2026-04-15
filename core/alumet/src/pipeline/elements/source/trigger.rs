@@ -29,6 +29,9 @@ pub struct TriggerSpec {
 #[derive(Debug)]
 pub(crate) struct Trigger {
     pub params: TriggerLoopParams,
+    /// The poll interval, if this trigger fires at a fixed time interval.
+    /// `None` for manual or future-based triggers.
+    poll_interval: Option<time::Duration>,
     inner: TriggerImpl,
 }
 
@@ -195,6 +198,10 @@ impl Trigger {
     pub fn new(spec: TriggerSpec) -> Result<Self, std::io::Error> {
         let interruptible = Interruptible::from(spec.interruptible);
         let manual_only = matches!(spec.mechanism, TriggerMechanismSpec::ManualOnly);
+        let poll_interval = match spec.mechanism {
+            TriggerMechanismSpec::TimeInterval(_, d) => Some(d),
+            _ => None,
+        };
         let mechanism = TriggerMechanism::try_from(spec.mechanism)?;
         let inner = if spec.allow_manual_trigger && !manual_only {
             let manual = TriggerMechanism::Manual(Arc::new(Notify::new()));
@@ -204,6 +211,7 @@ impl Trigger {
         };
         Ok(Self {
             params: spec.loop_params,
+            poll_interval,
             inner,
         })
     }
@@ -216,8 +224,14 @@ impl Trigger {
                 flush_rounds: 1,
                 update_rounds: 1,
             },
+            poll_interval: None,
             inner,
         }
+    }
+
+    /// Returns the poll interval of this trigger, if it is time-based.
+    pub fn poll_interval(&self) -> Option<time::Duration> {
+        self.poll_interval
     }
 
     pub fn manual_trigger(&self) -> Option<ManualTrigger> {
